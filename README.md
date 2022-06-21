@@ -51,6 +51,8 @@ ch9350l --> pc2
 
 **Usage:** ```ch9350-keysender.py <portname>,<baudrate>```  
 **Example command for Windows:** ```> py ch9350-keysender.py COM1,115200```  
+**Example input:**  
+![ch9350-sender](https://user-images.githubusercontent.com/45969150/174817700-2d087bc6-2717-4e0e-b037-5ccb62bf8391.gif)
 
 ASCII_TO_KEYCODE table in this script is derived from below code:  
 https://github.com/adafruit/Adafruit_CircuitPython_HID/blob/main/adafruit_hid/keyboard_layout_us.py
