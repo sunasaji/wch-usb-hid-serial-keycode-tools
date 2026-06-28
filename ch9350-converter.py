@@ -91,7 +91,7 @@ def convkeys(input):
             #if converted keycode is a modifier key(starts with "e"), set corresponding bit of output modifier keycode (outmod)
             if(conv_key[0]=="e"):
                 mod_shift_num=int(conv_key[1])
-                outmod = outmod + 1 << mod_shift_num
+                outmod = outmod | (1 << mod_shift_num)
             #if converted keycode is NOT a modifier key, add the conveted keycode to out_keys list and increment out_key_count
             else:
                 out_keys.append(int(conv_key,16))
