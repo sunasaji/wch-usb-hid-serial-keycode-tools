@@ -5,6 +5,7 @@
 import serial
 import sys
 import argparse
+import time
 
 # Argparse settings
 ap = argparse.ArgumentParser(description='USB HID Serial Keycode Sender for CH9350L')
@@ -151,9 +152,10 @@ ASCII_TO_KEYCODE = (
 port.write(list(bytearray.fromhex("57 ab 85 02")))
 
 count=0
-#If the wait is too short, some characters are failed to be sent.
-#If the wait is too long, data transfer speed becomes slow.
-wait=90000
+#Delay (seconds) between HID reports. The CH9350L needs a short gap between
+#reports; if WAIT is too short some characters are dropped, if too long the
+#transfer becomes slow. Tune to the minimum reliable value on your machine.
+WAIT=0.008
 prev_code = b"\x00"
 while True:
     c = sys.stdin.read(1)
@@ -165,13 +167,9 @@ while True:
     #If the input character is a newline, send a newline keycode and an EMPTY keycode.
     if(c=='\n'):
         port.write(list(bytearray.fromhex("57 ab 01 00 00 28 00 00 00 00 00")))
-        j=0
-        for i in range(wait):
-            j+=1
+        time.sleep(WAIT)
         port.write(list(bytearray.fromhex("57 ab 01 00 00 00 00 00 00 00 00")))
-        j=0
-        for i in range(wait):
-            j+=1
+        time.sleep(WAIT)
     else:
         c=ord(c)
         #If the input character is Ctrl-C, reset working status to 0 and exit
@@ -189,9 +187,7 @@ while True:
                 #Otherwise, the keyboard driver does not distinguish each keycode.
                 if(keycode==prev_code):
                     port.write(list(bytearray.fromhex("57 ab 01 00 00 00 00 00 00 00 00")))
-                    j=0
-                    for i in range(wait):
-                        j+=1
+                    time.sleep(WAIT)
                 prev_code=keycode
                 #count and checksum is not needed for state 2, so commented out
                 hid_keycode = f'{shift:02x}' +" 00 "+ f'{keycode:02x}' +" 00 00 00 00 00" # 00 "+ f'{count%256:02x}'
@@ -203,6 +199,4 @@ while True:
                 port.write(list(string_bytes))
                 print(str(count)+": "+result,end="\n")
                 count+=1
-                j=0
-                for i in range(wait):
-                    j+=1
+                time.sleep(WAIT)

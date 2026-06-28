@@ -7,8 +7,16 @@ English | [Japanese](https://github.com/sunasaji/wch-usb-hid-serial-keycode-tool
 
 # Environment
 - Windows11 10.0.25126
-- Python 3.10.4
+- Python 3.11 or later (on Windows)
 - pyserial 3.5
+
+On Windows, use Python 3.11 or later. `ch9350-keysender.py` inserts a short
+delay (`time.sleep()`) between HID reports so that the CH9350L does not drop
+characters. On Windows, the resolution of `time.sleep()` was limited to the
+OS timer tick (about 15.6 ms) up to Python 3.10, which makes such a small
+delay far too long and slows the transfer. Python 3.11 uses a high-resolution
+waitable timer, so the delay works as intended. (On Linux/macOS, Python 3.10
+is fine.)
 
 # Tools
 
@@ -33,9 +41,13 @@ usb-uart --> pc1
 
 ## ch9350-keysender.py
 This script reads text input from standard input and sends keycode to upper CH9350L.  
-I set CH9350L serial speed to 300,000 bps by connecting PIN37 and 38 to GND.  
-Then I pasted zipped and Base64-encoded 70KB data to the standard input of this script.  
-It needs 14min to transport, so the data transfer speed is 5KB/min = 83B/s = 664bps in my environment.  
+In my environment, I set the CH9350L serial speed to 115200 bps and `WAIT=0.008`.  
+I Base64-encoded a binary file to send, which became a 13.3KB string, and pasted
+this text data to the standard input.  
+The transfer took 120 seconds with no errors.  
+The data transfer speed was 6.6KB/min = 111B/s = 889bps.  
+A faster transfer may be possible by connecting PIN37 and 38 of the CH9350L to GND
+to set the baud rate to 300,000 bps, and by setting WAIT a little shorter.  
 Send data should end with a new line. Otherwise, the last character repeats endlessly.  
 **Structure chart:**
 ```mermaid
