@@ -148,8 +148,13 @@ ASCII_TO_KEYCODE = (
     b"\x4c"  # DEL DELETE (called Forward Delete in usb.org document)
 )
 
+# Frame constants (short command, working status 2)
+EMPTY_REPORT = bytes([0x57, 0xab, 0x01, 0, 0, 0, 0, 0, 0, 0, 0])
+NEWLINE_REPORT = bytes([0x57, 0xab, 0x01, 0, 0, 0x28, 0, 0, 0, 0, 0])
+RESET_STATUS = bytes([0x57, 0xab, 0x40, 0x00]) # Change working status to 0
+
 # Working Status Change Command 1: Change working status to 2, to use short command
-port.write(list(bytearray.fromhex("57 ab 85 02")))
+port.write(bytes([0x57, 0xab, 0x85, 0x02]))
 
 count=0
 #Delay (seconds) between HID reports. The CH9350L needs a short gap between
@@ -162,20 +167,20 @@ while True:
     #If the input is EOF, reset working status to 0 and exit
     if not len(c):
         # Working Status Switch Command 2: Change working status to 0
-        port.write(list(bytearray.fromhex("57 ab 40 00")))
+        port.write(RESET_STATUS)
         exit()
     #If the input character is a newline, send a newline keycode and an EMPTY keycode.
     if(c=='\n'):
-        port.write(list(bytearray.fromhex("57 ab 01 00 00 28 00 00 00 00 00")))
+        port.write(NEWLINE_REPORT)
         time.sleep(WAIT)
-        port.write(list(bytearray.fromhex("57 ab 01 00 00 00 00 00 00 00 00")))
+        port.write(EMPTY_REPORT)
         time.sleep(WAIT)
     else:
         c=ord(c)
         #If the input character is Ctrl-C, reset working status to 0 and exit
         if(c==3):
             # Working Status Switch Command 2: Change working status to 0
-            port.write(list(bytearray.fromhex("57 ab 40 00")))
+            port.write(RESET_STATUS)
             exit()
         if(c<128):
             shifted_keycode=ASCII_TO_KEYCODE[c]
@@ -186,17 +191,14 @@ while True:
                 #For example, a input string contains "aa" or "aA", this script sends [a][EMPTY][a] or [a][EMPTY][A].
                 #Otherwise, the keyboard driver does not distinguish each keycode.
                 if(keycode==prev_code):
-                    port.write(list(bytearray.fromhex("57 ab 01 00 00 00 00 00 00 00 00")))
+                    port.write(EMPTY_REPORT)
                     time.sleep(WAIT)
                 prev_code=keycode
                 #count and checksum is not needed for state 2, so commented out
-                hid_keycode = f'{shift:02x}' +" 00 "+ f'{keycode:02x}' +" 00 00 00 00 00" # 00 "+ f'{count%256:02x}'
-                #hid_keycode_bytes = bytearray.fromhex(hid_keycode)
-                #checksum = sum(hid_keycode_bytes) % 256
-                #result="57 ab 83 0c 12 "+ hid_keycode +" "+ f'{checksum:02x}' #+"\n"
-                result="57 ab 01 "+ hid_keycode
-                string_bytes=bytearray.fromhex(result)
-                port.write(list(string_bytes))
-                print(str(count)+": "+result,end="\n")
+                #checksum = sum(report) % 256 ; long command would be:
+                #report = bytes([0x57,0xab,0x83,0x0c,0x12, shift,0,keycode,0,0,0,0,0]) + bytes([checksum])
+                report = bytes([0x57, 0xab, 0x01, shift, 0, keycode, 0, 0, 0, 0, 0])
+                port.write(report)
+                print(str(count)+": "+report.hex(" "),end="\n")
                 count+=1
                 time.sleep(WAIT)

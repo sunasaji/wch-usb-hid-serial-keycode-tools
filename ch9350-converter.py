@@ -19,12 +19,12 @@ lowport = serial.Serial(*lower_serial_args)
 
 # See https://gist.github.com/MightyPork/6da26e382a7ad91b5496ee55fdc73db2
 # Key Conversion Table
-# "input_keycode" : "converted_keycode"
+# input_keycode : converted_keycode
 # A keycode is a 1-byte scan code used in a USB HID Report.
-keytbl={       #InputKey    ConvertedKey
-    "39":"e0", #Caps     -> LeftCtrl
-    "8a":"e0", #Henkan   -> LeftCtrl
-    "8b":"e2"  #MuHenkan -> LeftAlt
+keytbl={          #InputKey    ConvertedKey
+    0x39:0xe0,    #Caps     -> LeftCtrl
+    0x8a:0xe0,    #Henkan   -> LeftCtrl
+    0x8b:0xe2,    #MuHenkan -> LeftAlt
 }
 # Modifier keycodes:
 # e0: Left Control
@@ -36,135 +36,127 @@ keytbl={       #InputKey    ConvertedKey
 # e6: Right Alt
 # e7: Right GUI
 
-def readport(p):
-    result=""
-    if(p.in_waiting>0):
-        result="57 "
-        r=p.read(1).hex()
-        while (r!='57'):
-            result+=r+" "
-            r=p.read(1).hex()
-    return(result)
+def hx(data):
+    # Format bytes as space-separated hex for debug output, e.g. "57 ab 82 00"
+    return data.hex(" ")
 
-# Convert keycodes and calculate check sum
-def convkeys(input):
-    input_len=len(input)//3
-    max_key_num=input_len-4 # Exclude 4 slots ([connection-info] [modifier] [reserved] [seq-num])
+def readport(p):
+    # Read bytes until (but not including) the next frame-start byte 0x57.
+    # Returns a frame starting with 0x57. Returns b"" if nothing is waiting.
+    if(p.in_waiting<=0):
+        return b""
+    data=bytearray([0x57])
+    b=p.read(1)
+    while(b!=b"\x57"):
+        data+=b
+        b=p.read(1)
+    return bytes(data)
+
+# Convert keycodes and recalculate the check sum.
+# payload: bytes = [connection-info][modifier][reserved][keys...][seq-num]
+# Returns bytes = converted payload followed by the recalculated checksum byte.
+def convkeys(payload):
+    max_key_num=len(payload)-4 # Exclude 4 slots ([connection-info] [modifier] [reserved] [seq-num])
+    conn_info=payload[0] # connection info
+    inmod=payload[1]     # input modifier
+    seq=payload[-1]      # sequence number
     out_key_count=0
     out_keys=[]
-    r1 = input[1:3] # connection info
-    outmod = 0x00
-    inmod = int(input[4:6],16) # input modifier
+    outmod=0x00
     for i in range(8):
         if(out_key_count>max_key_num-1):
             break
         # read each bit of input modifier and interpret it as "e0" to "e7" keycode (inmod_key)
-        elif(inmod & 1 << i):
-            inmod_key_bin = 0xe0 + i
-            inmod_key = inmod_key_bin.to_bytes(1, byteorder="big").hex()
-            if inmod_key in keytbl.keys():
-                conv_key = keytbl[inmod_key]
-                #if converted keycode is "00", ignore this input key
-                if(conv_key=="00"):
+        elif(inmod & (1 << i)):
+            inmod_key=0xe0+i
+            if inmod_key in keytbl:
+                conv_key=keytbl[inmod_key]
+                #if converted keycode is 0x00, ignore this input key
+                if(conv_key==0x00):
                     continue
-                #if converted keycode is a modifier key(starts with "e"), set corresponding bit of output modifier keycode (outmod)
-                if(conv_key[0]=="e"):
-                    mod_shift_num=int(conv_key[1])
-                    outmod = outmod | (1 << mod_shift_num)
-                #if converted keycode is NOT a modifier key, add the conveted keycode to out_keys list and increment out_key_count
+                #if converted keycode is a modifier key (0xe0-0xe7), set corresponding bit of output modifier keycode (outmod)
+                if(0xe0<=conv_key<=0xe7):
+                    outmod=outmod | (1 << (conv_key-0xe0))
+                #if converted keycode is NOT a modifier key, add the converted keycode to out_keys list and increment out_key_count
                 else:
-                    out_keys.append(int(conv_key,16))
+                    out_keys.append(conv_key)
                     out_key_count+=1
             else:
-                outmod = outmod | inmod & 1 << i
-    in_key_count=3 # "in_key_count=0" is connection info, "in_key_count=1" is modifier key, "in_key_count=2" is reserved, so set 3
-    for i in range(max_key_num):
-        inkey = input[in_key_count*3+1:in_key_count*3+3]
-        in_key_count+=1
+                outmod=outmod | (inmod & (1 << i))
+    for idx in range(max_key_num):
+        inkey=payload[3+idx] # "3+idx" skips connection info, modifier and reserved slots
         if(out_key_count>max_key_num-1):
             break
-        if inkey in keytbl.keys():
-            conv_key = keytbl[inkey]
-            #if converted keycode is "00", ignore this input key
-            if(conv_key=="00"):
+        if inkey in keytbl:
+            conv_key=keytbl[inkey]
+            #if converted keycode is 0x00, ignore this input key
+            if(conv_key==0x00):
                 continue
-            #if converted keycode is a modifier key(starts with "e"), set corresponding bit of output modifier keycode (outmod)
-            if(conv_key[0]=="e"):
-                mod_shift_num=int(conv_key[1])
-                outmod = outmod | (1 << mod_shift_num)
-            #if converted keycode is NOT a modifier key, add the conveted keycode to out_keys list and increment out_key_count
+            #if converted keycode is a modifier key (0xe0-0xe7), set corresponding bit of output modifier keycode (outmod)
+            if(0xe0<=conv_key<=0xe7):
+                outmod=outmod | (1 << (conv_key-0xe0))
+            #if converted keycode is NOT a modifier key, add the converted keycode to out_keys list and increment out_key_count
             else:
-                out_keys.append(int(conv_key,16))
+                out_keys.append(conv_key)
                 out_key_count+=1
         else:
-            out_keys.append(int(inkey,16))
+            out_keys.append(inkey)
             out_key_count+=1
-    check_sum = int(r1,16) + outmod + int(input[-2:],16) # add "connection info" and "output modifier key" and "sequence number"
-    key_str=""
-    out_keys_len=len(out_keys)
-    for i in range(max_key_num):
-        if(i>=out_keys_len):
-            out_keys.append(0)
-            out_key_count+=1
-        check_sum = check_sum + out_keys[i]
-        key_str = key_str +" "+ out_keys[i].to_bytes(1,byteorder="big").hex()
-    result= " "+ r1 +" "+ outmod.to_bytes(1,byteorder="big").hex() +" 00"+ key_str +" "+input[-2:] +" "+ (check_sum & 0xff).to_bytes(1,byteorder="big").hex()
-    return(result)
+    # Pad / trim the key slots to max_key_num
+    out_keys=(out_keys+[0]*max_key_num)[:max_key_num]
+    body=bytes([conn_info, outmod, 0x00]+out_keys+[seq])
+    check_sum=sum(body)&0xff # connection info + output modifier + keys + sequence number (reserved 0x00 adds nothing)
+    return body+bytes([check_sum])
 
-r = lowport.read(1).hex()
+r = lowport.read(1)
 while True:
     while (lowport.in_waiting > 0):
-        if(r=='57'):
-            r=lowport.read(1).hex()
-            if(r=='ab'):
-                r=lowport.read(1).hex()
-                if(r=='82'):
-                    r=lowport.read(1).hex()
-                    string="57 ab 82 "+r
+        if(r==b"\x57"):
+            r=lowport.read(1)
+            if(r==b"\xab"):
+                r=lowport.read(1)
+                if(r==b"\x82"):
+                    r=lowport.read(1)
+                    frame=bytes([0x57, 0xab, 0x82])+r
                     #Suppress status request/response frames. If needed, uncomment below prints.
-                    #print("L> "+string)
-                    upport.write(list(bytearray.fromhex(string)))
-                    #print("U< "+string)
-                    upreturn=readport(upport)[:-1]
-                    #print("U> "+upreturn)
-                    lowport.write(list(bytearray.fromhex(upreturn)))
-                    #print("L< "+upreturn)
-                    r=lowport.read(1).hex()
-                elif(r=='83' or r=='88'):
-                    r2=lowport.read(1)
-                    keycode_len=int.from_bytes(r2,'big')
-                    r3=lowport.read(1).hex()
-                    r4=""
-                    #checksum=0
-                    for i in range(keycode_len-2):
-                        r5=lowport.read(1)
-                        r4+=" "+r5.hex()
-                        #checksum=(checksum+int.from_bytes(r5,'big'))&0xff
-                    r6=lowport.read(1).hex()
-                    string="57 ab "+r+" "+r2.hex()+" "+r3+r4+" "+r6
-                    #print(string +" check:"+'%01x'%(checksum & 0xff))
-                    print("L> "+string)
-                    if(r3[0]=="1"): #keyboard
-                        string="57 ab "+r+" "+r2.hex()+" "+r3+ convkeys(r4) #Call Keycode converter function
-                    upport.write(list(bytearray.fromhex(string)))
-                    print("U< "+string)
-                    r=lowport.read(1).hex()
+                    #print("L> "+hx(frame))
+                    upport.write(frame)
+                    #print("U< "+hx(frame))
+                    upreturn=readport(upport)
+                    #print("U> "+hx(upreturn))
+                    lowport.write(upreturn)
+                    #print("L< "+hx(upreturn))
+                    r=lowport.read(1)
+                elif(r==b"\x83" or r==b"\x88"):
+                    cmd=r[0]
+                    keycode_len=lowport.read(1)[0]
+                    report_type=lowport.read(1)[0]
+                    payload=lowport.read(keycode_len-2)
+                    checksum=lowport.read(1)
+                    frame=bytes([0x57, 0xab, cmd, keycode_len, report_type])+payload+checksum
+                    print("L> "+hx(frame))
+                    if((report_type>>4)==0x1): #keyboard
+                        frame=bytes([0x57, 0xab, cmd, keycode_len, report_type])+convkeys(payload) #Call keycode converter
+                    upport.write(frame)
+                    print("U< "+hx(frame))
+                    r=lowport.read(1)
                 else:
-                    string="57 ab "+r
-                    while(r != '57'):
-                        r=lowport.read(1).hex()
-                        string+=" "+r
-                    print("L> "+string[:-3])
-                    upport.write(list(bytearray.fromhex(string[:-3])))
-                    print("U< "+string[:-3])
+                    frame=bytearray([0x57, 0xab])+r
+                    while(r != b"\x57"):
+                        r=lowport.read(1)
+                        frame+=r
+                    frame=bytes(frame[:-1]) #drop the trailing 0x57 (start of the next frame)
+                    print("L> "+hx(frame))
+                    upport.write(frame)
+                    print("U< "+hx(frame))
                     #If issued commands to upper ch9350l are not "No response" commands, then read a response from upper
-                    if(string[:9]!='57 ab 81 ' and
-                       string[:9]!='57 ab 84 ' and
-                       string[:9]!='57 ab 85 ' and
-                       string[:9]!='57 ab 86 ' and
-                       string[:9]!='57 ab 87 ' and
-                       string[:9]!='57 ab 40 '):
-                        upreturn=readport(upport)[:-1]
-                        print("U> "+upreturn)
-                        lowport.write(list(bytearray.fromhex(upreturn)))
-                        print("L< "+upreturn)
+                    if(frame[:3]!=bytes([0x57,0xab,0x81]) and
+                       frame[:3]!=bytes([0x57,0xab,0x84]) and
+                       frame[:3]!=bytes([0x57,0xab,0x85]) and
+                       frame[:3]!=bytes([0x57,0xab,0x86]) and
+                       frame[:3]!=bytes([0x57,0xab,0x87]) and
+                       frame[:3]!=bytes([0x57,0xab,0x40])):
+                        upreturn=readport(upport)
+                        print("U> "+hx(upreturn))
+                        lowport.write(upreturn)
+                        print("L< "+hx(upreturn))

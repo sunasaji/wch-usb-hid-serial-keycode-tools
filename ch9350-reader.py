@@ -6,7 +6,7 @@ import serial
 import argparse
 
 # Argparse settings
-ap = argparse.ArgumentParser(description='USB HID Serial Keycode Sender for CH9350L')
+ap = argparse.ArgumentParser(description='USB HID Serial Keycode Reader for CH9350L')
 ap.add_argument('lower_serial', help='Serial port for Lower CH9350L. For example: COM1,115200')
 args = ap.parse_args()
 serial_args=args.lower_serial.split(",")
@@ -14,35 +14,33 @@ serial_args=args.lower_serial.split(",")
 # Open serial port
 port = serial.Serial(*serial_args)
 
-r=""
-r = port.read(1).hex()
+def hx(data):
+    # Format bytes as space-separated hex for output, e.g. "57 ab 83 0c"
+    return data.hex(" ")
+
+r = port.read(1)
 while True:
     while (port.in_waiting > 0):
-        if(r=='57'):
-            r=port.read(1).hex()
-            if(r=='ab'):
-                r=port.read(1).hex()
-                if(r=='82'):
-                    r=port.read(1).hex()
-                    #print("57 ab 82 "+r)
-                elif(r=='83' or r=='88'):
-                    r2=port.read(1)
-                    len=int.from_bytes(r2,'big')
-                    r3=port.read(1).hex()
-                    r4=""
-                    #checksum=0
-                    for i in range(len-2):
-                        r5=port.read(1)
-                        r4+=" "+r5.hex()
-                        #checksum=(checksum+int.from_bytes(r5,'big'))&0xff
-                    r6=port.read(1).hex()
-                    #print("57 ab "+r+" "+r2.hex()+" "+r3+r4+" "+r6+" check:"+'%01x'%(checksum & 0xff))
-                    print("57 ab "+r+" "+r2.hex()+" "+r3+r4+" "+r6)
+        if(r==b"\x57"):
+            r=port.read(1)
+            if(r==b"\xab"):
+                r=port.read(1)
+                if(r==b"\x82"):
+                    r=port.read(1)
+                    #print(hx(bytes([0x57, 0xab, 0x82])+r))
+                elif(r==b"\x83" or r==b"\x88"):
+                    cmd=r[0]
+                    length=port.read(1)[0]
+                    report_type=port.read(1)[0]
+                    payload=port.read(length-2)
+                    checksum=port.read(1)
+                    frame=bytes([0x57, 0xab, cmd, length, report_type])+payload+checksum
+                    print(hx(frame))
                 else:
-                    string="57 ab "+r
-                    while(r != '57'):
-                        r=port.read(1).hex()
-                        string+=" "+r
-                    print(string[:-3])
+                    frame=bytearray([0x57, 0xab])+r
+                    while(r != b"\x57"):
+                        r=port.read(1)
+                        frame+=r
+                    print(hx(bytes(frame[:-1]))) #drop the trailing 0x57 (start of the next frame)
                     continue
-        r=port.read(1).hex()
+        r=port.read(1)

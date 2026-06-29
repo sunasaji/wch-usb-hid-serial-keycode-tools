@@ -6,7 +6,7 @@ import serial
 import argparse
 
 # Argparse settings
-ap = argparse.ArgumentParser(description='USB HID Serial Keycode Converter for CH9350L')
+ap = argparse.ArgumentParser(description='USB HID Serial Keycode Proxy for CH9350L')
 ap.add_argument('upper_serial', help='Serial port for Upper CH9350L. For example: COM1,115200')
 ap.add_argument('lower_serial', help='Serial port for Lower CH9350L. For example: COM2,115200')
 args = ap.parse_args()
@@ -17,68 +17,69 @@ lower_serial_args=args.lower_serial.split(",")
 upport = serial.Serial(*upper_serial_args)
 lowport = serial.Serial(*lower_serial_args)
 
-def readport(p):
-    result=""
-    if(p.in_waiting>0):
-        result="57 "
-        r=p.read(1).hex()
-        while (r!='57'):
-            result+=r+" "
-            r=p.read(1).hex()
-    return(result)
+def hx(data):
+    # Format bytes as space-separated hex for debug output, e.g. "57 ab 82 00"
+    return data.hex(" ")
 
-r = lowport.read(1).hex()
+def readport(p):
+    # Read bytes until (but not including) the next frame-start byte 0x57.
+    # Returns a frame starting with 0x57. Returns b"" if nothing is waiting.
+    if(p.in_waiting<=0):
+        return b""
+    data=bytearray([0x57])
+    b=p.read(1)
+    while(b!=b"\x57"):
+        data+=b
+        b=p.read(1)
+    return bytes(data)
+
+r = lowport.read(1)
 while True:
     while (lowport.in_waiting > 0):
-        if(r=='57'):
-            r=lowport.read(1).hex()
-            if(r=='ab'):
-                r=lowport.read(1).hex()
-                if(r=='82'):
-                    r=lowport.read(1).hex()
-                    string="57 ab 82 "+r
+        if(r==b"\x57"):
+            r=lowport.read(1)
+            if(r==b"\xab"):
+                r=lowport.read(1)
+                if(r==b"\x82"):
+                    r=lowport.read(1)
+                    frame=bytes([0x57, 0xab, 0x82])+r
                     #Suppress status request/response frames. If needed, uncomment below prints.
-                    #print("L> "+string)
-                    upport.write(list(bytearray.fromhex(string)))
-                    #print("U< "+string)
-                    upreturn=readport(upport)[:-1]
-                    #print("U> "+upreturn)
-                    lowport.write(list(bytearray.fromhex(upreturn)))
-                    #print("L< "+upreturn)
-                    r=lowport.read(1).hex()
-                elif(r=='83' or r=='88'):
-                    r2=lowport.read(1)
-                    keycode_len=int.from_bytes(r2,'big')
-                    r3=lowport.read(1).hex()
-                    r4=""
-                    #checksum=0
-                    for i in range(keycode_len-2):
-                        r5=lowport.read(1)
-                        r4+=" "+r5.hex()
-                        #checksum=(checksum+int.from_bytes(r5,'big'))&0xff
-                    r6=lowport.read(1).hex()
-                    string="57 ab "+r+" "+r2.hex()+" "+r3+r4+" "+r6
-                    #print(string +" check:"+'%01x'%(checksum & 0xff))
-                    print("L> "+string)
-                    upport.write(list(bytearray.fromhex(string)))
-                    print("U< "+string)
-                    r=lowport.read(1).hex()
+                    #print("L> "+hx(frame))
+                    upport.write(frame)
+                    #print("U< "+hx(frame))
+                    upreturn=readport(upport)
+                    #print("U> "+hx(upreturn))
+                    lowport.write(upreturn)
+                    #print("L< "+hx(upreturn))
+                    r=lowport.read(1)
+                elif(r==b"\x83" or r==b"\x88"):
+                    cmd=r[0]
+                    keycode_len=lowport.read(1)[0]
+                    report_type=lowport.read(1)[0]
+                    payload=lowport.read(keycode_len-2)
+                    checksum=lowport.read(1)
+                    frame=bytes([0x57, 0xab, cmd, keycode_len, report_type])+payload+checksum
+                    print("L> "+hx(frame))
+                    upport.write(frame)
+                    print("U< "+hx(frame))
+                    r=lowport.read(1)
                 else:
-                    string="57 ab "+r
-                    while(r != '57'):
-                        r=lowport.read(1).hex()
-                        string+=" "+r
-                    print("L> "+string[:-3])
-                    upport.write(list(bytearray.fromhex(string[:-3])))
-                    print("U< "+string[:-3])
+                    frame=bytearray([0x57, 0xab])+r
+                    while(r != b"\x57"):
+                        r=lowport.read(1)
+                        frame+=r
+                    frame=bytes(frame[:-1]) #drop the trailing 0x57 (start of the next frame)
+                    print("L> "+hx(frame))
+                    upport.write(frame)
+                    print("U< "+hx(frame))
                     #If issued commands to upper ch9350l are not "No response" commands, then read a response from upper
-                    if(string[:9]!='57 ab 81 ' and
-                       string[:9]!='57 ab 84 ' and
-                       string[:9]!='57 ab 85 ' and
-                       string[:9]!='57 ab 86 ' and
-                       string[:9]!='57 ab 87 ' and
-                       string[:9]!='57 ab 40 '):
-                        upreturn=readport(upport)[:-1]
-                        print("U> "+upreturn)
-                        lowport.write(list(bytearray.fromhex(upreturn)))
-                        print("L< "+upreturn)
+                    if(frame[:3]!=bytes([0x57,0xab,0x81]) and
+                       frame[:3]!=bytes([0x57,0xab,0x84]) and
+                       frame[:3]!=bytes([0x57,0xab,0x85]) and
+                       frame[:3]!=bytes([0x57,0xab,0x86]) and
+                       frame[:3]!=bytes([0x57,0xab,0x87]) and
+                       frame[:3]!=bytes([0x57,0xab,0x40])):
+                        upreturn=readport(upport)
+                        print("U> "+hx(upreturn))
+                        lowport.write(upreturn)
+                        print("L< "+hx(upreturn))
