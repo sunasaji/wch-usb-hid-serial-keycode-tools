@@ -184,7 +184,7 @@ while True:
             exit()
         if(c<128):
             shifted_keycode=ASCII_TO_KEYCODE[c]
-            if(shifted_keycode != b"\x00"):
+            if(shifted_keycode != 0):
                 shift = (shifted_keycode & 0b10000000) >> 6
                 keycode = shifted_keycode & 0b01111111
                 #If the new input key code is the same as the previous keycode, send an EMPTY keycode to distinguish each key press.
