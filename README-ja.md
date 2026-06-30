@@ -10,12 +10,35 @@ CH9350Lのデータシートはこちらから参照できます。 http://www.w
 - Python 3.11 以降（Windowsの場合）
 - pyserial 3.5
 
-Windowsでは Python 3.11 以降を使用してください。`ch9350-keysender.py` は
+Windowsでは Python 3.11 以降を使用してください。`ch9350-keysender` は
 CH9350Lが文字を取りこぼさないよう、HIDレポートの間に短い遅延（`time.sleep()`）
 を入れています。Windowsの `time.sleep()` の分解能は Python 3.10 以前では
 OSのタイマ刻み（約15.6ms）に律速されるため、この短い遅延が必要以上に長くなり
 転送が遅くなります。Python 3.11 以降は高分解能の待機可能タイマを使うため、
 意図したとおりの遅延になります。（Linux/macOS では Python 3.10 でも問題ありません。）
+
+# インストール
+```
+pip install wch-hid-serial
+```
+これにより `ch9350-reader`、`ch9350-proxy`、`ch9350-converter`、
+`ch9350-keysender` コマンドがインストールされます。本リポジトリのチェックアウト
+からインストールする場合は `pip install .`（開発用には `pip install -e .`）を
+実行してください。
+
+# ライブラリとしての利用
+各ツールは `wch_hid_serial` パッケージの薄いラッパであり、自作のコードからも
+利用できます。
+```python
+from wch_hid_serial.ch9350 import convert_report, iter_lower_frames, iter_key_reports, open_port
+
+# CH9350Lのキーボードレポートのペイロードを変換（ペイロード＋チェックサムを返す）:
+convert_report(bytes.fromhex("01 00 00 39 00 00 00 00 00 5f"))
+
+# CH9350Lの下位機からフレームを読む:
+for frame in iter_lower_frames(open_port("COM1,115200")):
+    print(frame.hex(" "))
+```
 
 # ツール
 
@@ -34,18 +57,18 @@ ch9350l --> usb-uart
 usb-uart --> pc1
 ```
 
-**使用法:** ```ch9350-reader.py <portname>,<baudrate>```  
-**Windowsでのコマンド例:** ```> py ch9350-reader.py COM1,115200```  
+**使用法:** ```ch9350-reader <portname>,<baudrate>```  
+**コマンド例:** ```ch9350-reader COM1,115200```  
 **出力例**:  
 ![ch9350-reader](images/ch9350-reader.gif)
 
 ## ch9350-keysender.py
 本スクリプトは標準入力よりテキストの入力を受け取り、各文字のキーコードをCH9350Lの上位機に送信します。  
-私の環境では、CH9350Lのボーレートを115200bps、`WAIT=0.008` と設定しています。  
+私の環境では、CH9350Lのボーレートを115200bps、`--wait-ms 8` と設定しています。  
 送信用バイナリファイルをBase64でエンコードしたところ13.3KBの文字列となりました。このテキストデータを標準入力に貼り付けました。  
 送信には120秒かかり、エラーはありませんでした。  
 データ転送速度は 6.6KB/分 = 111B/秒 = 889bps となりました。  
-CH9350Lの37,38番ピンをGNDに接続し、ボーレートを300,000bpsに設定し、WAITを少し短く設定することにより、より高速な転送ができるかもしれません。  
+CH9350Lの37,38番ピンをGNDに接続し、ボーレートを300,000bpsに設定し、`--wait-ms` を少し小さく設定することにより、より高速な転送ができるかもしれません。  
 送信データは改行で終わる必要があります。改行を付けない場合、最後の文字が無限に入力され続けてしまいます。  
 **構成図:**
 ```mermaid
@@ -59,8 +82,9 @@ usb-uart --> ch9350l
 ch9350l --> pc2
 ```
 
-**使用法:** ```ch9350-keysender.py <portname>,<baudrate>```  
-**Windowsでのコマンド例:** ```> py ch9350-keysender.py COM1,115200```  
+**使用法:** ```ch9350-keysender [--wait-ms <ミリ秒>] <portname>,<baudrate>```  
+**コマンド例:** ```ch9350-keysender COM1,115200```  
+`--wait-ms` はHIDレポート間の遅延（ミリ秒）を指定します（既定 8）。  
 **送信例:**  
 ![ch9350-sender](https://user-images.githubusercontent.com/45969150/174817700-2d087bc6-2717-4e0e-b037-5ccb62bf8391.gif)
 
@@ -87,8 +111,8 @@ usb-uart_U <--> ch9350l_U
 ch9350l_U <--> pc2
 ```
 
-**使用法:** ```ch9350-proxy.py <upper_portname>,<upper_baudrate> <lower_portname>,<lower_baudrate>```  
-**Windowsでのコマンド例:** ```> py ch9350-proxy.py COM1,115200 COM2,115200```  
+**使用法:** ```ch9350-proxy <upper_portname>,<upper_baudrate> <lower_portname>,<lower_baudrate>```  
+**コマンド例:** ```ch9350-proxy COM1,115200 COM2,115200```  
 **通信例:** (2個のCH9350L間)  
 ![ch9350-proxy](images/ch9350-proxy.gif)  
 凡例:  
@@ -117,10 +141,16 @@ usb-uart_U <--> ch9350l_U
 ch9350l_U <--> pc2
 ```
 
-**使用法:** ```ch9350-converter.py <upper_portname>,<lower_baudrate> <lower_portname>,<lower_baudrate>```  
-**Windowsでのコマンド例:** ```> py ch9350-converter.py COM1,115200 COM2,115200```  
-**キー変換表の例:**  
-![keytable](images/keytable.png)  
+**使用法:** ```ch9350-converter <upper_portname>,<upper_baudrate> <lower_portname>,<lower_baudrate>```  
+**コマンド例:** ```ch9350-converter COM1,115200 COM2,115200```  
+**既定のキー変換表** (`wch_hid_serial/ch9350/convert.py` の `DEFAULT_TABLE`):
+
+| 入力キーコード | 出力キーコード |
+| --- | --- |
+| 0x39 (Caps Lock) | 0xe0 (Left Ctrl) |
+| 0x8a (変換) | 0xe0 (Left Ctrl) |
+| 0x8b (無変換) | 0xe2 (Left Alt) |
+
 ```
 モディファイヤキーはキー変換表では下記のコードで表現されます。
 e0: Left Control
@@ -151,7 +181,7 @@ U< 57 ab 83 0c 12 01 01 00 00 00 00 00 00 00 6b 6d (01 00 00:Control)
 ```
 
 # Tips
-CygwinやMSYSのterminalを使う場合、[winpty](https://github.com/rprichard/winpty) コマンドをこのように使ってください。 ```winpty py ch9350-reader.py COM1,115200```
+CygwinやMSYSのterminalを使う場合、[winpty](https://github.com/rprichard/winpty) コマンドをこのように使ってください。 ```winpty ch9350-reader COM1,115200```
 
 # License
 

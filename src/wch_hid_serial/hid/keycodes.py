@@ -1,22 +1,36 @@
-#!/usr/bin/env python3
-# USB HID Serial Keycode Sender for CH9350L
-# (C) 2022 Suna.S
-# SPDX-License-Identifier: MIT
-import serial
-import sys
-import argparse
-import time
+"""USB HID keyboard keycodes and the US-layout ASCII conversion table.
 
-# Argparse settings
-ap = argparse.ArgumentParser(description='USB HID Serial Keycode Sender for CH9350L')
-ap.add_argument('upper_serial', help='Serial port for Upper CH9350L. For example: COM1,115200')
-args = ap.parse_args()
-serial_args=args.upper_serial.split(",")
+These are standard USB HID definitions, not specific to any chip, so they
+are shared by every chip backend in this package.
+"""
 
-# Open serial port
-port = serial.Serial(*serial_args)
+# High bit of an ASCII_TO_KEYCODE entry means "press with Shift".
+SHIFT_FLAG = 0x80
 
-# ASCII_TO_KEYCODE table from https://github.com/adafruit/Adafruit_CircuitPython_HID/blob/main/adafruit_hid/keyboard_layout_us.py
+# Modifier keycodes occupy 0xe0..0xe7 (Left Ctrl .. Right GUI).
+MODIFIER_BASE = 0xe0
+MOD_LEFT_CTRL = 0xe0
+MOD_LEFT_SHIFT = 0xe1
+MOD_LEFT_ALT = 0xe2
+MOD_LEFT_GUI = 0xe3
+MOD_RIGHT_CTRL = 0xe4
+MOD_RIGHT_SHIFT = 0xe5
+MOD_RIGHT_ALT = 0xe6
+MOD_RIGHT_GUI = 0xe7
+
+
+def is_modifier(keycode):
+    """Return True if ``keycode`` is a modifier key (0xe0..0xe7)."""
+    return MODIFIER_BASE <= keycode <= MODIFIER_BASE + 7
+
+
+def modifier_bit(keycode):
+    """Return the modifier-byte bit for a modifier ``keycode`` (0xe0..0xe7)."""
+    return 1 << (keycode - MODIFIER_BASE)
+
+
+# ASCII -> HID keycode (high bit = Shift), US layout. 128 entries (NUL..DEL).
+# Derived from Adafruit_CircuitPython_HID keyboard_layout_us.py (MIT).
 ASCII_TO_KEYCODE = (
     b"\x00"  # NUL
     b"\x00"  # SOH
@@ -148,57 +162,18 @@ ASCII_TO_KEYCODE = (
     b"\x4c"  # DEL DELETE (called Forward Delete in usb.org document)
 )
 
-# Frame constants (short command, working status 2)
-EMPTY_REPORT = bytes([0x57, 0xab, 0x01, 0, 0, 0, 0, 0, 0, 0, 0])
-NEWLINE_REPORT = bytes([0x57, 0xab, 0x01, 0, 0, 0x28, 0, 0, 0, 0, 0])
-RESET_STATUS = bytes([0x57, 0xab, 0x40, 0x00]) # Change working status to 0
 
-# Working Status Change Command 1: Change working status to 2, to use short command
-port.write(bytes([0x57, 0xab, 0x85, 0x02]))
+def ascii_to_keycode(ch):
+    """Map a single ASCII character to ``(shift, keycode)``.
 
-count=0
-#Delay (seconds) between HID reports. The CH9350L needs a short gap between
-#reports; if WAIT is too short some characters are dropped, if too long the
-#transfer becomes slow. Tune to the minimum reliable value on your machine.
-WAIT=0.008
-prev_code = b"\x00"
-while True:
-    c = sys.stdin.read(1)
-    #If the input is EOF, reset working status to 0 and exit
-    if not len(c):
-        # Working Status Switch Command 2: Change working status to 0
-        port.write(RESET_STATUS)
-        exit()
-    #If the input character is a newline, send a newline keycode and an EMPTY keycode.
-    if(c=='\n'):
-        port.write(NEWLINE_REPORT)
-        time.sleep(WAIT)
-        port.write(EMPTY_REPORT)
-        time.sleep(WAIT)
-    else:
-        c=ord(c)
-        #If the input character is Ctrl-C, reset working status to 0 and exit
-        if(c==3):
-            # Working Status Switch Command 2: Change working status to 0
-            port.write(RESET_STATUS)
-            exit()
-        if(c<128):
-            shifted_keycode=ASCII_TO_KEYCODE[c]
-            if(shifted_keycode != 0):
-                shift = (shifted_keycode & 0b10000000) >> 6
-                keycode = shifted_keycode & 0b01111111
-                #If the new input key code is the same as the previous keycode, send an EMPTY keycode to distinguish each key press.
-                #For example, a input string contains "aa" or "aA", this script sends [a][EMPTY][a] or [a][EMPTY][A].
-                #Otherwise, the keyboard driver does not distinguish each keycode.
-                if(keycode==prev_code):
-                    port.write(EMPTY_REPORT)
-                    time.sleep(WAIT)
-                prev_code=keycode
-                #count and checksum is not needed for state 2, so commented out
-                #checksum = sum(report) % 256 ; long command would be:
-                #report = bytes([0x57,0xab,0x83,0x0c,0x12, shift,0,keycode,0,0,0,0,0]) + bytes([checksum])
-                report = bytes([0x57, 0xab, 0x01, shift, 0, keycode, 0, 0, 0, 0, 0])
-                port.write(report)
-                print(str(count)+": "+report.hex(" "),end="\n")
-                count+=1
-                time.sleep(WAIT)
+    ``shift`` is a bool (whether the character requires the Shift key) and
+    ``keycode`` is the 7-bit HID keycode. Returns ``None`` for characters
+    that have no mapping (keycode 0) or that are outside ASCII (ord >= 128).
+    """
+    c = ord(ch)
+    if c >= 128:
+        return None
+    shifted = ASCII_TO_KEYCODE[c]
+    if shifted == 0:
+        return None
+    return bool(shifted & SHIFT_FLAG), shifted & 0x7f

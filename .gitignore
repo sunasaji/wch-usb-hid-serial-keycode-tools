@@ -1,0 +1,12 @@
+# Python build / packaging artifacts
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.pytest_cache/
+
+# Local test data
+sample.bin
+sample.bin.b64

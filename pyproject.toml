@@ -1,0 +1,38 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "wch-hid-serial"
+version = "0.1.0"
+description = "Read, write and convert USB HID reports over UART using WCH CH9350L (CH9329/CH9328 planned)"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { file = "LICENSE.txt" }
+authors = [{ name = "Suna.S" }]
+keywords = ["ch9350", "ch9329", "ch9328", "wch", "usb", "hid", "serial", "uart", "keyboard", "kvm"]
+classifiers = [
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Topic :: System :: Hardware :: Hardware Drivers",
+    "Operating System :: OS Independent",
+]
+dependencies = ["pyserial>=3.5"]
+
+[project.urls]
+Homepage = "https://github.com/sunasaji/wch-usb-hid-serial-keycode-tools"
+
+[project.optional-dependencies]
+test = ["pytest>=7"]
+
+[project.scripts]
+ch9350-reader = "wch_hid_serial.cli.ch9350.reader:main"
+ch9350-proxy = "wch_hid_serial.cli.ch9350.proxy:main"
+ch9350-converter = "wch_hid_serial.cli.ch9350.converter:main"
+ch9350-keysender = "wch_hid_serial.cli.ch9350.keysender:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/wch_hid_serial"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
