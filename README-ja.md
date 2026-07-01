@@ -28,16 +28,61 @@ pip install wch-hid-serial
 
 # ライブラリとしての利用
 各ツールは `wch_hid_serial` パッケージの薄いラッパであり、自作のコードからも
-利用できます。
+利用できます。以下の各例は、コードとその出力を併記しています。
+
+**キーボードレポートの変換** — `convert_report()` はCH9350Lのキーボードレポート
+のペイロードを変換表で書き換え、再計算したチェックサムを付けて返します。
 ```python
-from wch_hid_serial.ch9350 import convert_report, iter_lower_frames, iter_key_reports, open_port
+from wch_hid_serial.ch9350 import convert_report
 
-# CH9350Lのキーボードレポートのペイロードを変換（ペイロード＋チェックサムを返す）:
-convert_report(bytes.fromhex("01 00 00 39 00 00 00 00 00 5f"))
+# 既定の変換表: Caps Lock (0x39) -> Left Ctrl (0xe0)
+payload = bytes.fromhex("01 00 00 39 00 00 00 00 00 5f")
+print(convert_report(payload).hex(" "))
+# 01 01 00 00 00 00 00 00 00 5f 61
 
-# CH9350Lの下位機からフレームを読む:
+# カスタム変換表: 'a' キー (0x04) を Left Shift (0xe1) に変換
+payload = bytes.fromhex("01 00 00 04 00 00 00 00 00 20")
+print(convert_report(payload, {0x04: 0xe1}).hex(" "))
+# 01 02 00 00 00 00 00 00 00 20 23
+```
+
+**テキストからキーレポートを生成** — `iter_key_reports()` は `(frame, is_char)`
+のペアを返します。同じキーが連続する場合、それぞれ別の打鍵として認識されるよう
+間に空レポートが挿入されます。
+```python
+from wch_hid_serial.ch9350 import iter_key_reports
+
+for frame, is_char in iter_key_reports("Hi!"):
+    print(frame.hex(" "))
+# 57 ab 01 02 00 0b 00 00 00 00 00   (H, Shiftあり)
+# 57 ab 01 00 00 0c 00 00 00 00 00   (i)
+# 57 ab 01 02 00 1e 00 00 00 00 00   (!, Shiftあり)
+
+for frame, is_char in iter_key_reports("aa"):
+    print(frame.hex(" "))
+# 57 ab 01 00 00 04 00 00 00 00 00   (a)
+# 57 ab 01 00 00 00 00 00 00 00 00   (空レポート、連続打鍵の間に挿入)
+# 57 ab 01 00 00 04 00 00 00 00 00   (a)
+```
+
+**HIDキーコードの参照** — `ascii_to_keycode()` は `(shift, keycode)` を返します。
+```python
+from wch_hid_serial.hid import ascii_to_keycode
+
+print(ascii_to_keycode("A"))     # (True, 4)   Shift + キーコード 0x04
+print(ascii_to_keycode("a"))     # (False, 4)
+print(ascii_to_keycode("\x00"))  # None        (キーコードなし)
+```
+
+**デバイスからフレームを読む** — `iter_lower_frames()` はCH9350Lの下位機を読み、
+生のフレームを返します。シリアルポートが必要なため、出力は環境に依存します。
+```python
+from wch_hid_serial.ch9350 import iter_lower_frames, open_port
+
 for frame in iter_lower_frames(open_port("COM1,115200")):
     print(frame.hex(" "))
+# 57 ab 83 0c 12 01 00 00 39 00 00 00 00 00 5f 99   (Caps Lock 押下)
+# 57 ab 83 0c 12 01 00 00 8b 00 00 00 00 00 65 f1   (無変換 押下)
 ```
 
 # ツール

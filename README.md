@@ -27,17 +27,65 @@ This installs the `ch9350-reader`, `ch9350-proxy`, `ch9350-converter` and
 instead, run `pip install .` (or `pip install -e .` for development).
 
 # Library usage
-The tools are thin wrappers around the `wch_hid_serial` package, which you
-can use from your own code:
+The tools are thin wrappers around the `wch_hid_serial` package, which you can
+use from your own code. Each example below shows the code and the output it
+produces.
+
+**Convert a keyboard report** — `convert_report()` rewrites the keys in a
+CH9350L keyboard report payload with a lookup table and appends a recomputed
+checksum.
 ```python
-from wch_hid_serial.ch9350 import convert_report, iter_lower_frames, iter_key_reports, open_port
+from wch_hid_serial.ch9350 import convert_report
 
-# Convert a CH9350L keyboard report payload (returns payload + checksum):
-convert_report(bytes.fromhex("01 00 00 39 00 00 00 00 00 5f"))
+# Default table: Caps Lock (0x39) -> Left Ctrl (0xe0)
+payload = bytes.fromhex("01 00 00 39 00 00 00 00 00 5f")
+print(convert_report(payload).hex(" "))
+# 01 01 00 00 00 00 00 00 00 5f 61
 
-# Read frames from the lower CH9350L:
+# Custom table: remap the 'a' key (0x04) to Left Shift (0xe1)
+payload = bytes.fromhex("01 00 00 04 00 00 00 00 00 20")
+print(convert_report(payload, {0x04: 0xe1}).hex(" "))
+# 01 02 00 00 00 00 00 00 00 20 23
+```
+
+**Build key reports from text** — `iter_key_reports()` yields `(frame, is_char)`
+pairs. An empty report is inserted between two identical keys so they register
+separately.
+```python
+from wch_hid_serial.ch9350 import iter_key_reports
+
+for frame, is_char in iter_key_reports("Hi!"):
+    print(frame.hex(" "))
+# 57 ab 01 02 00 0b 00 00 00 00 00   (H, with Shift)
+# 57 ab 01 00 00 0c 00 00 00 00 00   (i)
+# 57 ab 01 02 00 1e 00 00 00 00 00   (!, with Shift)
+
+for frame, is_char in iter_key_reports("aa"):
+    print(frame.hex(" "))
+# 57 ab 01 00 00 04 00 00 00 00 00   (a)
+# 57 ab 01 00 00 00 00 00 00 00 00   (empty, inserted between repeats)
+# 57 ab 01 00 00 04 00 00 00 00 00   (a)
+```
+
+**Look up HID keycodes** — `ascii_to_keycode()` returns `(shift, keycode)`.
+```python
+from wch_hid_serial.hid import ascii_to_keycode
+
+print(ascii_to_keycode("A"))     # (True, 4)   Shift + keycode 0x04
+print(ascii_to_keycode("a"))     # (False, 4)
+print(ascii_to_keycode("\x00"))  # None        (no keycode)
+```
+
+**Read frames from a device** — `iter_lower_frames()` reads the lower CH9350L
+and yields raw frames. It needs a serial port, so the output depends on your
+hardware.
+```python
+from wch_hid_serial.ch9350 import iter_lower_frames, open_port
+
 for frame in iter_lower_frames(open_port("COM1,115200")):
     print(frame.hex(" "))
+# 57 ab 83 0c 12 01 00 00 39 00 00 00 00 00 5f 99   (Caps Lock pressed)
+# 57 ab 83 0c 12 01 00 00 8b 00 00 00 00 00 65 f1   (MuHenkan pressed)
 ```
 
 # Tools
