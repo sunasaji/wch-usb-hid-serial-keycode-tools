@@ -1,7 +1,10 @@
 # wch-usb-hid-serial-keycode-tools
-WCH社のUSBキーボード・マウス-UART コミュニケーションコントロールチップ、CH9350Lのシリアルデータを読み・書き・変換するツールです。  
-本ツールはWCH社の公式ツールではありません。  
-CH9350Lのデータシートはこちらから参照できます。 http://www.wch-ic.com/downloads/CH9350DS_PDF.html
+WCH社の「USB HID over UART」チップ向けのツールおよびPythonライブラリです:
+- **CH9350L** — 双方向のUSBキーボード/マウス-UARTブリッジ。HIDレポートフレームの読み・書き・変換を行います。([データシート](http://www.wch-ic.com/downloads/CH9350DS_PDF.html))
+- **CH9329** — UARTコマンドパケットからUSBキーボード/マウスをエミュレートするシリアル-USB HIDチップ。([データシート](https://www.wch.cn/uploads/file/20190508/1557278355473027.pdf))
+
+[CH9350L 用ツール](#ツール) と [CH9329](#ch9329) 節を参照してください。  
+本ツールはWCH社の公式ツールではありません。
 
 [English](https://github.com/sunasaji/wch-usb-hid-serial-keycode-tools/blob/master/README.md) | Japanese
 
@@ -22,9 +25,9 @@ OSのタイマ刻み（約15.6ms）に律速されるため、この短い遅延
 pip install wch-hid-serial
 ```
 これにより `ch9350-reader`、`ch9350-proxy`、`ch9350-converter`、
-`ch9350-keysender` コマンドがインストールされます。本リポジトリのチェックアウト
-からインストールする場合は `pip install .`（開発用には `pip install -e .`）を
-実行してください。
+`ch9350-keysender`、`ch9329-keysender`、`ch9329-mouse` コマンドがインストール
+されます。本リポジトリのチェックアウトからインストールする場合は
+`pip install .`（開発用には `pip install -e .`）を実行してください。
 
 # ライブラリとしての利用
 各ツールは `wch_hid_serial` パッケージの薄いラッパであり、自作のコードからも
@@ -224,6 +227,58 @@ U< 57 ab 83 0c 12 01 04 00 00 00 00 00 00 00 65 6a (04 00 00:Alt)
 L> 57 ab 83 0c 12 01 00 00 8a 00 00 00 00 00 6b f6 (00 00 8a:Henkan) は下記に変換されます。
 U< 57 ab 83 0c 12 01 01 00 00 00 00 00 00 00 6b 6d (01 00 00:Control)
 ```
+
+# CH9329
+本パッケージは **CH9329** にも対応しています。CH9329 はWCHの別のチップで、
+UARTコマンドパケットを受け取って USB HID キーボード/マウスを *エミュレート*
+します。これは CH9350L の **upper（上位）** 側と同じ役割です。どちらもシリアル
+入力から USB HID デバイスをエミュレートし、単体でも使えます（`ch9350-keysender`
+は CH9350L の upper を単体で駆動する例です）。違いはインターフェースの抽象度で、
+CH9329 は高レベルなコマンドプロトコル、CH9350L はほぼ生の HIDレポートフレームを
+流します。CH9329 のパケットは `57 AB <addr> <cmd> <len> <data...> <sum>` の
+形式です。
+
+**テキストをUSB打鍵として送信** — `ch9329-keysender` コマンド:  
+**使用法:** ```ch9329-keysender [--wait-ms <ミリ秒>] <portname>,<baudrate>```  
+**コマンド例:** ```ch9329-keysender COM1,9600```  
+標準入力のテキストを読み、CH9329経由で打鍵します（1文字につき押下と解放の
+レポートを送信）。CH9329 の既定ボーレートは 9600 です。
+
+**マウス操作** — `ch9329-mouse` コマンド（1回につき1操作を引数で実行）:  
+**使用法:** ```ch9329-mouse <portname>,<baudrate> <操作> ...```  
+```
+ch9329-mouse COM1,9600 move 100 200 --screen 1920x1080  # 絶対（画面ピクセル）
+ch9329-mouse COM1,9600 move 5 -3 --relative             # 相対移動
+ch9329-mouse COM1,9600 click --button right             # クリック
+ch9329-mouse COM1,9600 down --button left               # 押下保持
+ch9329-mouse COM1,9600 up --button left                 # 解放
+ch9329-mouse COM1,9600 scroll -2                         # 下スクロール
+ch9329-mouse COM1,9600 drag 100 100 300 300 --screen 1920x1080
+```
+
+**ライブラリとしての利用:**
+```python
+from wch_hid_serial.ch9329 import Ch9329, open_port
+from wch_hid_serial.hid import modifier_name_to_bit
+
+dev = Ch9329(open_port("COM1,9600"))
+dev.type_text("Hello!\n")                        # USBキーボードとして打鍵
+dev.tap_key(0x04, modifier_name_to_bit("ctrl"))  # Ctrl+A（押下＋解放）
+dev.click("left")                                # クリック
+dev.move_absolute(960, 540, screen=(1920, 1080)) # 画面中央へ移動
+dev.drag(100, 100, 300, 300, screen=(1920, 1080))# ドラッグ（移動中ボタン保持）
+```
+
+パケットビルダは純粋（ポート不要）なのでテストが容易です:
+```python
+from wch_hid_serial.ch9329 import general_packet, relative_packet
+
+print(general_packet(0, [0x04]).hex(" "))  # 'a' キー
+# 57 ab 00 02 08 00 00 04 00 00 00 00 00 10
+print(relative_packet(5, -3).hex(" "))
+# 57 ab 00 05 05 01 00 05 fd 00 0f
+```
+実行可能なサンプルは [examples/ch9329_demo.py](examples/ch9329_demo.py) を参照してください。
 
 # Tips
 CygwinやMSYSのterminalを使う場合、[winpty](https://github.com/rprichard/winpty) コマンドをこのように使ってください。 ```winpty ch9350-reader COM1,115200```

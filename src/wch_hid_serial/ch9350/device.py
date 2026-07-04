@@ -1,18 +1,8 @@
 """CH9350L serial I/O: opening ports and reading frames from a port."""
 
-import serial
+from ..serialio import open_port  # re-exported for backwards compatibility
 
-
-def open_port(spec):
-    """Open a serial port from a ``"name[,baudrate]"`` spec.
-
-    Example: ``open_port("COM1,115200")`` or ``open_port("/dev/ttyUSB0")``.
-    """
-    parts = spec.split(",")
-    kwargs = {}
-    if len(parts) > 1 and parts[1]:
-        kwargs["baudrate"] = int(parts[1])
-    return serial.Serial(parts[0], **kwargs)
+__all__ = ["open_port", "read_response", "iter_lower_frames"]
 
 
 def read_response(port):

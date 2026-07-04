@@ -1,7 +1,10 @@
 # wch-usb-hid-serial-keycode-tools
-A tool to read/write/convert serial data of CH9350L: USB Keyboard and Mouse to UART Communication Control Chip by WCH.  
-This software is not an official product of WCH company.  
-CH9350L Datasheet is here: http://www.wch-ic.com/downloads/CH9350DS_PDF.html
+Tools and a Python library for WCH USB-HID-over-UART chips:
+- **CH9350L** — a bidirectional USB keyboard/mouse to UART bridge. Read, write and convert its HID report frames. ([datasheet](http://www.wch-ic.com/downloads/CH9350DS_PDF.html))
+- **CH9329** — a serial-to-USB-HID chip that emulates a USB keyboard/mouse from UART command packets. ([datasheet](https://www.wch.cn/uploads/file/20190508/1557278355473027.pdf))
+
+See the [CH9350L tools](#tools) and the [CH9329](#ch9329) section below.  
+This software is not an official product of WCH company.
 
 English | [Japanese](https://github.com/sunasaji/wch-usb-hid-serial-keycode-tools/blob/master/README-ja.md)
 
@@ -22,9 +25,10 @@ is fine.)
 ```
 pip install wch-hid-serial
 ```
-This installs the `ch9350-reader`, `ch9350-proxy`, `ch9350-converter` and
-`ch9350-keysender` commands. To install from a checkout of this repository
-instead, run `pip install .` (or `pip install -e .` for development).
+This installs the `ch9350-reader`, `ch9350-proxy`, `ch9350-converter`,
+`ch9350-keysender`, `ch9329-keysender` and `ch9329-mouse` commands. To install
+from a checkout of this repository instead, run `pip install .` (or
+`pip install -e .` for development).
 
 # Library usage
 The tools are thin wrappers around the `wch_hid_serial` package, which you can
@@ -228,6 +232,57 @@ U< 57 ab 83 0c 12 01 04 00 00 00 00 00 00 00 65 6a (04 00 00:Alt)
 L> 57 ab 83 0c 12 01 00 00 8a 00 00 00 00 00 6b f6 (00 00 8a:Henkan) is converted to
 U< 57 ab 83 0c 12 01 01 00 00 00 00 00 00 00 6b 6d (01 00 00:Control)
 ```
+
+# CH9329
+The package also supports the **CH9329**, a different WCH chip that receives
+UART command packets and *emulates* a USB HID keyboard/mouse. This does the
+same job as the **upper** end of a CH9350L: both emulate a USB HID device from
+serial and can be used on their own (`ch9350-keysender` drives a CH9350L upper
+end by itself). The difference is the interface — the CH9329 uses a high-level
+command protocol, while the CH9350L carries near-raw HID report frames. A
+CH9329 packet is `57 AB <addr> <cmd> <len> <data...> <sum>`.
+
+**Type text as USB keystrokes** with the `ch9329-keysender` command:  
+**Usage:** ```ch9329-keysender [--wait-ms <ms>] <portname>,<baudrate>```  
+**Example command:** ```ch9329-keysender COM1,9600```  
+It reads text from stdin and types it via the CH9329 (a press and release
+report per character). The default baud rate of the CH9329 is 9600.
+
+**Control the mouse** with the `ch9329-mouse` command (one operation per call):  
+**Usage:** ```ch9329-mouse <portname>,<baudrate> <operation> ...```  
+```
+ch9329-mouse COM1,9600 move 100 200 --screen 1920x1080  # absolute (screen px)
+ch9329-mouse COM1,9600 move 5 -3 --relative             # relative move
+ch9329-mouse COM1,9600 click --button right             # click
+ch9329-mouse COM1,9600 down --button left               # press and hold
+ch9329-mouse COM1,9600 up --button left                 # release
+ch9329-mouse COM1,9600 scroll -2                         # scroll down
+ch9329-mouse COM1,9600 drag 100 100 300 300 --screen 1920x1080
+```
+
+**Library usage:**
+```python
+from wch_hid_serial.ch9329 import Ch9329, open_port
+from wch_hid_serial.hid import modifier_name_to_bit
+
+dev = Ch9329(open_port("COM1,9600"))
+dev.type_text("Hello!\n")                        # type as a USB keyboard
+dev.tap_key(0x04, modifier_name_to_bit("ctrl"))  # Ctrl+A (press + release)
+dev.click("left")                                # click
+dev.move_absolute(960, 540, screen=(1920, 1080)) # move to screen centre
+dev.drag(100, 100, 300, 300, screen=(1920, 1080))# drag (button held while moving)
+```
+
+The packet builders are pure (no port needed), which makes them easy to test:
+```python
+from wch_hid_serial.ch9329 import general_packet, relative_packet
+
+print(general_packet(0, [0x04]).hex(" "))  # key 'a'
+# 57 ab 00 02 08 00 00 04 00 00 00 00 00 10
+print(relative_packet(5, -3).hex(" "))
+# 57 ab 00 05 05 01 00 05 fd 00 0f
+```
+See [examples/ch9329_demo.py](examples/ch9329_demo.py) for a runnable sample.
 
 # Tips
 On Cygwin or MSYS terminal, use [winpty](https://github.com/rprichard/winpty) like this: ```winpty ch9350-reader COM1,115200```
