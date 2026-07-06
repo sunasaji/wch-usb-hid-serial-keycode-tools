@@ -20,6 +20,7 @@ from .modifiers import (
     modifier_name_to_bit,
     modifiers_to_byte,
 )
+from .report import keyboard_report, iter_text_reports, RELEASE_REPORT
 
 __all__ = [
     "ASCII_TO_KEYCODE",
@@ -38,4 +39,7 @@ __all__ = [
     "MOD_RGUI",
     "modifier_name_to_bit",
     "modifiers_to_byte",
+    "keyboard_report",
+    "iter_text_reports",
+    "RELEASE_REPORT",
 ]

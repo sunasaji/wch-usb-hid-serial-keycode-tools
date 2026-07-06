@@ -2,8 +2,9 @@
 WCH社の「USB HID over UART」チップ向けのツールおよびPythonライブラリです:
 - **CH9350L** — 双方向のUSBキーボード/マウス-UARTブリッジ。HIDレポートフレームの読み・書き・変換を行います。([データシート](http://www.wch-ic.com/downloads/CH9350DS_PDF.html))
 - **CH9329** — UARTコマンドパケットからUSBキーボード/マウスをエミュレートするシリアル-USB HIDチップ。([データシート](https://www.wch.cn/uploads/file/20190508/1557278355473027.pdf))
+- **CH9328** — よりシンプルなUART-USB HID **キーボード**チップ（マウス無し）。生の8バイトHIDレポート、またはASCIIテキストを送ります。([データシート](https://wch-ic.com/downloads/CH9328DS1_PDF.html))
 
-[CH9350L 用ツール](#ツール) と [CH9329](#ch9329) 節を参照してください。  
+[CH9350L 用ツール](#ツール)、[CH9329](#ch9329)、[CH9328](#ch9328) 節を参照してください。  
 本ツールはWCH社の公式ツールではありません。
 
 [English](https://github.com/sunasaji/wch-usb-hid-serial-keycode-tools/blob/master/README.md) | Japanese
@@ -25,9 +26,9 @@ OSのタイマ刻み（約15.6ms）に律速されるため、この短い遅延
 pip install wch-hid-serial
 ```
 これにより `ch9350-reader`、`ch9350-proxy`、`ch9350-converter`、
-`ch9350-keysender`、`ch9329-keysender`、`ch9329-mouse` コマンドがインストール
-されます。本リポジトリのチェックアウトからインストールする場合は
-`pip install .`（開発用には `pip install -e .`）を実行してください。
+`ch9350-keysender`、`ch9329-keysender`、`ch9329-mouse`、`ch9328-keysender`
+コマンドがインストールされます。本リポジトリのチェックアウトからインストール
+する場合は `pip install .`（開発用には `pip install -e .`）を実行してください。
 
 # ライブラリとしての利用
 各ツールは `wch_hid_serial` パッケージの薄いラッパであり、自作のコードからも
@@ -279,6 +280,34 @@ print(relative_packet(5, -3).hex(" "))
 # 57 ab 00 05 05 01 00 05 fd 00 0f
 ```
 実行可能なサンプルは [examples/ch9329_demo.py](examples/ch9329_demo.py) を参照してください。
+
+# CH9328
+**CH9328** はよりシンプルなWCHチップで、UART-USB HID **キーボード**専用（マウス
+無し）、コマンド枠やチェックサムもありません。動作モードは**ハードウェアのピン**で
+選択します:
+- **Mode 0–2:** ASCIIテキストをそのまま送ると、チップ側で打鍵に変換します。
+- **Mode 3:** 生の8バイトHIDキーボードレポート（`[modifier, 0x00, key1..key6]`）を送ります。
+
+**テキストの送信** — `ch9328-keysender` コマンド（`--mode` をチップのピン設定に合わせます）:  
+**使用法:** ```ch9328-keysender [--mode hid|ascii] [--wait-ms <ミリ秒>] <portname>,<baudrate>```  
+```
+ch9328-keysender COM1,9600               # Mode 3: 生HIDレポート（既定）
+ch9328-keysender --mode ascii COM1,9600  # Mode 0–2: テキストをそのまま送信
+```
+
+**ライブラリとしての利用:**
+```python
+from wch_hid_serial.ch9328 import Ch9328, open_port, keyboard_report
+
+dev = Ch9328(open_port("COM1,9600"))
+dev.type_text("Hello!\n")     # Mode 3: 生HIDレポート（1文字ごとに押下＋解放）
+dev.send_ascii("Hello!\n")    # Mode 0–2: チップがASCIIを打鍵に変換
+
+print(keyboard_report(0, [0x04]).hex(" "))  # 'a' キーの生8バイトレポート
+# 00 00 04 00 00 00 00 00
+```
+データシート: <https://wch-ic.com/downloads/CH9328DS1_PDF.html>。実行可能な
+サンプルは [examples/ch9328_demo.py](examples/ch9328_demo.py) を参照してください。
 
 # Tips
 CygwinやMSYSのterminalを使う場合、[winpty](https://github.com/rprichard/winpty) コマンドをこのように使ってください。 ```winpty ch9350-reader COM1,115200```

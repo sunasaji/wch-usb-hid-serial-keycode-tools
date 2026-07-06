@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "wch-hid-serial"
 version = "0.1.0"
-description = "Read, write and convert USB HID reports over UART using WCH CH9350L and CH9329 (CH9328 planned)"
+description = "Read, write and convert USB HID reports over UART using WCH CH9350L, CH9329 and CH9328"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { file = "LICENSE.txt" }
@@ -32,6 +32,7 @@ ch9350-converter = "wch_hid_serial.cli.ch9350.converter:main"
 ch9350-keysender = "wch_hid_serial.cli.ch9350.keysender:main"
 ch9329-keysender = "wch_hid_serial.cli.ch9329.keysender:main"
 ch9329-mouse = "wch_hid_serial.cli.ch9329.mouse:main"
+ch9328-keysender = "wch_hid_serial.cli.ch9328.keysender:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/wch_hid_serial"]

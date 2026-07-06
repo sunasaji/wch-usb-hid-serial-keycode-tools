@@ -2,8 +2,9 @@
 Tools and a Python library for WCH USB-HID-over-UART chips:
 - **CH9350L** — a bidirectional USB keyboard/mouse to UART bridge. Read, write and convert its HID report frames. ([datasheet](http://www.wch-ic.com/downloads/CH9350DS_PDF.html))
 - **CH9329** — a serial-to-USB-HID chip that emulates a USB keyboard/mouse from UART command packets. ([datasheet](https://www.wch.cn/uploads/file/20190508/1557278355473027.pdf))
+- **CH9328** — a simpler UART-to-USB-HID *keyboard* chip (no mouse); sends raw 8-byte HID reports or plain ASCII text. ([datasheet](https://wch-ic.com/downloads/CH9328DS1_PDF.html))
 
-See the [CH9350L tools](#tools) and the [CH9329](#ch9329) section below.  
+See the [CH9350L tools](#tools), [CH9329](#ch9329) and [CH9328](#ch9328) sections below.  
 This software is not an official product of WCH company.
 
 English | [Japanese](https://github.com/sunasaji/wch-usb-hid-serial-keycode-tools/blob/master/README-ja.md)
@@ -26,9 +27,9 @@ is fine.)
 pip install wch-hid-serial
 ```
 This installs the `ch9350-reader`, `ch9350-proxy`, `ch9350-converter`,
-`ch9350-keysender`, `ch9329-keysender` and `ch9329-mouse` commands. To install
-from a checkout of this repository instead, run `pip install .` (or
-`pip install -e .` for development).
+`ch9350-keysender`, `ch9329-keysender`, `ch9329-mouse` and `ch9328-keysender`
+commands. To install from a checkout of this repository instead, run
+`pip install .` (or `pip install -e .` for development).
 
 # Library usage
 The tools are thin wrappers around the `wch_hid_serial` package, which you can
@@ -283,6 +284,35 @@ print(relative_packet(5, -3).hex(" "))
 # 57 ab 00 05 05 01 00 05 fd 00 0f
 ```
 See [examples/ch9329_demo.py](examples/ch9329_demo.py) for a runnable sample.
+
+# CH9328
+The **CH9328** is a simpler WCH chip: UART to USB HID **keyboard** only (no
+mouse), with no command framing or checksum. Its working mode is selected by
+hardware pins:
+- **Modes 0-2:** send plain ASCII text; the chip converts it to keystrokes.
+- **Mode 3:** send raw 8-byte HID keyboard reports (`[modifier, 0x00, key1..key6]`).
+
+**Type text** with the `ch9328-keysender` command (choose `--mode` to match the
+chip's pins):  
+**Usage:** ```ch9328-keysender [--mode hid|ascii] [--wait-ms <ms>] <portname>,<baudrate>```  
+```
+ch9328-keysender COM1,9600               # mode 3: raw HID reports (default)
+ch9328-keysender --mode ascii COM1,9600  # modes 0-2: send text as-is
+```
+
+**Library usage:**
+```python
+from wch_hid_serial.ch9328 import Ch9328, open_port, keyboard_report
+
+dev = Ch9328(open_port("COM1,9600"))
+dev.type_text("Hello!\n")     # mode 3: raw HID reports (press + release per char)
+dev.send_ascii("Hello!\n")    # modes 0-2: the chip converts ASCII to keystrokes
+
+print(keyboard_report(0, [0x04]).hex(" "))  # raw 8-byte report for key 'a'
+# 00 00 04 00 00 00 00 00
+```
+Datasheet: <https://wch-ic.com/downloads/CH9328DS1_PDF.html>. See
+[examples/ch9328_demo.py](examples/ch9328_demo.py) for a runnable sample.
 
 # Tips
 On Cygwin or MSYS terminal, use [winpty](https://github.com/rprichard/winpty) like this: ```winpty ch9350-reader COM1,115200```

@@ -11,9 +11,11 @@ Implemented:
   used on their own); the difference is the interface -- the CH9329 uses a
   high-level command protocol, while the CH9350L carries near-raw HID
   report frames.
+- CH9328 (:mod:`wch_hid_serial.ch9328`): a simpler UART-to-USB-HID keyboard
+  (keyboard only, no framing). It sends raw 8-byte HID reports (mode 3) or
+  plain ASCII text (modes 0-2), with the mode selected by hardware pins.
 
-Support for CH9328 is planned as another sibling subpackage. The
-chip-agnostic USB HID helpers live in :mod:`wch_hid_serial.hid`.
+The chip-agnostic USB HID helpers live in :mod:`wch_hid_serial.hid`.
 """
 
 __version__ = "0.1.0"
