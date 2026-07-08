@@ -1,0 +1,30 @@
+# fr105.yaml - French AZERTY 105-key layout
+# Reference: XKB symbols/fr, Windows kbdfr.dll
+#
+# Format: character: [modifier, hid_keycode]
+# Only characters that differ from US104 need to be listed.
+
+overrides:
+  # AZERTY swaps A/Q, W/Z, and repositions M
+  'a': [none, 0x14]       # Q position
+  'A': [shift, 0x14]
+  'q': [none, 0x04]       # A position
+  'Q': [shift, 0x04]
+  'z': [none, 0x1A]       # W position
+  'Z': [shift, 0x1A]
+  'w': [none, 0x1D]       # Z position
+  'W': [shift, 0x1D]
+  'm': [none, 0x33]       # ; position
+  'M': [shift, 0x33]
+  # Number row: digits require Shift on AZERTY
+  '1': [shift, 0x1E]
+  '2': [shift, 0x1F]
+  '3': [shift, 0x20]
+  '4': [shift, 0x21]
+  '5': [shift, 0x22]
+  '6': [shift, 0x23]
+  '7': [shift, 0x24]
+  '8': [shift, 0x25]
+  '9': [shift, 0x26]
+  '0': [shift, 0x27]
+  # TODO: accented chars require further mapping

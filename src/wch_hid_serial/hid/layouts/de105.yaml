@@ -1,0 +1,22 @@
+# de105.yaml - German QWERTZ 105-key layout
+# Reference: XKB symbols/de, Windows kbdgr.dll
+#
+# Format: character: [modifier, hid_keycode]
+# Only characters that differ from US104 need to be listed.
+
+overrides:
+  # QWERTZ swaps Y and Z
+  'z': [none, 0x1C]       # Y position (US: y)
+  'Z': [shift, 0x1C]
+  'y': [none, 0x1D]       # Z position (US: z)
+  'Y': [shift, 0x1D]
+  # Symbol differences
+  '@': [ralt, 0x14]       # AltGr+Q
+  '\': [ralt, 0x2D]       # AltGr+ss
+  '[': [ralt, 0x25]       # AltGr+8
+  ']': [ralt, 0x26]       # AltGr+9
+  '{': [ralt, 0x24]       # AltGr+7
+  '}': [ralt, 0x27]       # AltGr+0
+  '~': [ralt, 0x30]       # AltGr++
+  '|': [ralt, 0x31]       # AltGr+<
+  # TODO: umlauts and ss require Unicode handling

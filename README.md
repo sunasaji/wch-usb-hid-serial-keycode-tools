@@ -314,6 +314,38 @@ print(keyboard_report(0, [0x04]).hex(" "))  # raw 8-byte report for key 'a'
 Datasheet: <https://wch-ic.com/downloads/CH9328DS1_PDF.html>. See
 [examples/ch9328_demo.py](examples/ch9328_demo.py) for a runnable sample.
 
+# Keyboard keys and layouts
+The shared `wch_hid_serial.hid` layer resolves key names and characters to HID
+keycodes, with pluggable keyboard layouts. This is handy when building keyboard
+reports for any of the chips.
+```python
+from wch_hid_serial.hid import (
+    resolve_key, char_to_hid, special_key_to_hid, set_layout, validate_chars,
+    keyboard_report,
+)
+
+resolve_key("c", ["ctrl"])    # (0x01, 0x06)  -> (modifier, keycode) for Ctrl+C
+special_key_to_hid("f5")      # 0x3e
+char_to_hid("@")              # (0x02, 0x1f)  Shift+2 on US
+
+# Build an 8-byte HID report for a key combo:
+mod, kc = resolve_key("a", ["ctrl"])
+keyboard_report(mod, [kc])    # b'\x01\x00\x04\x00\x00\x00\x00\x00'
+
+# Switch layout (built-in: us104, jp106, uk105, de105, fr105):
+set_layout("jp106")
+char_to_hid("@")              # (0x00, 0x2f)  '@' is unshifted on JIS
+
+validate_chars("Hello!\n")    # raises ValueError on characters that can't be typed
+```
+Built-in layouts are individual YAML files. Add your own **without touching any
+Python**: drop a `<name>.yaml` into a directory and point `WCH_HID_LAYOUTS_DIR`
+at it (or pass `layouts_dir=` to `set_layout`), e.g. `set_layout("myiso",
+layouts_dir="/path/to/layouts")`. You can also register a layout in memory with
+`register_layout(name, overrides)` or read one file with `load_layout_yaml(path)`.
+See the [layout guide](src/wch_hid_serial/hid/layouts/README.md) for the file
+format and a HID keycode reference.
+
 # Tips
 On Cygwin or MSYS terminal, use [winpty](https://github.com/rprichard/winpty) like this: ```winpty ch9350-reader COM1,115200```
 

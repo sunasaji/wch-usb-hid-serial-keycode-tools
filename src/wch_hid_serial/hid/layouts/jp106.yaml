@@ -1,0 +1,36 @@
+# jp106.yaml - Japanese JIS 106-key layout
+# Reference: JIS X 6002, XKB symbols/jp, Windows kbd106.dll
+#
+# Format: character: [modifier, hid_keycode]
+# Modifiers: none, shift, ralt, ctrl, shift+ralt, etc.
+# HID keycodes: hex (0x1F) or decimal (31)
+#
+# Only characters that differ from US104 need to be listed.
+
+overrides:
+  # Number row shifted symbols
+  # US: !@#$%^&*()   JIS: !"#$%&'()
+  '"': [shift, 0x1F]      # Shift+2
+  '&': [shift, 0x23]      # Shift+6
+  "'": [shift, 0x24]      # Shift+7
+  '(': [shift, 0x25]      # Shift+8
+  ')': [shift, 0x26]      # Shift+9
+
+  # Punctuation / symbol keys
+  '=': [shift, 0x2D]      # Shift+-
+  '^': [none, 0x2E]       # unshifted
+  '~': [shift, 0x2E]      # Shift+^
+  '@': [none, 0x2F]       # unshifted
+  '`': [shift, 0x2F]      # Shift+@
+  '[': [none, 0x30]       # unshifted
+  '{': [shift, 0x30]      # Shift+[
+  ']': [none, 0x32]       # Non-US # key
+  '}': [shift, 0x32]      # Shift+]
+  '+': [shift, 0x33]      # Shift+;
+  ':': [none, 0x34]       # unshifted
+  '*': [shift, 0x34]      # Shift+:
+
+  # JIS-specific keys
+  '\': [none, 0x87]       # ro key (International1)
+  '_':  [shift, 0x87]     # Shift+ro
+  '|':  [shift, 0x89]     # Shift+yen (International3)

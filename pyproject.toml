@@ -17,7 +17,7 @@ classifiers = [
     "Topic :: System :: Hardware :: Hardware Drivers",
     "Operating System :: OS Independent",
 ]
-dependencies = ["pyserial>=3.5"]
+dependencies = ["pyserial>=3.5", "PyYAML>=5"]
 
 [project.urls]
 Homepage = "https://github.com/sunasaji/wch-usb-hid-serial-keycode-tools"

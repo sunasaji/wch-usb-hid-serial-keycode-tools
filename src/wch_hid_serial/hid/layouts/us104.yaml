@@ -1,0 +1,6 @@
+# us104.yaml - US ANSI 104-key layout (base layout)
+# Reference: USB HID Usage Tables, XKB symbols/us, Windows kbdus.dll
+#
+# This is the base layout. No overrides needed.
+
+overrides: {}

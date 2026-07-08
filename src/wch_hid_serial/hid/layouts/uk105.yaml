@@ -1,0 +1,14 @@
+# uk105.yaml - UK ISO 105-key layout
+# Reference: XKB symbols/gb, Windows kbduk.dll
+#
+# Format: character: [modifier, hid_keycode]
+# Only characters that differ from US104 need to be listed.
+
+overrides:
+  '#': [none, 0x32]       # Non-US # key
+  '~': [shift, 0x32]      # Shift+#
+  '"': [shift, 0x1F]      # Shift+2  (US: @)
+  '@': [shift, 0x34]      # Shift+'  (US: Shift+2)
+  '\': [none, 0x31]       # same position but ISO physical key
+  '|': [shift, 0x31]
+  # TODO: GBP sign requires Unicode / AltGr handling
